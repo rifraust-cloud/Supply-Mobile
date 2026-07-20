@@ -619,7 +619,7 @@ class MainActivity : ComponentActivity() {
 
     private fun input(hintText: String) = EditText(this).apply {
         hint = hintText
-        singleLine = true
+        setSingleLine(true)
         background = rounded("#FFFFFF", BORDER, 14)
         setPadding(dp(14),0,dp(14),0)
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54))
