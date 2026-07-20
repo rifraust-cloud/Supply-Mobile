@@ -1,0 +1,6 @@
+R_DEF: Internal format may change without notice
+local
+drawable bg_pims_mobile_quick_scan
+drawable ic_pims_mobile_camera
+string app_name
+style AppTheme

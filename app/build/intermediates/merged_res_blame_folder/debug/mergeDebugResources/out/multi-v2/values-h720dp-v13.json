@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.ptx7.supplymobile.app-mergeDebugResources-32:/values-h720dp-v13/values-h720dp-v13.xml",
+            "map": [
+                {
+                    "source": "/home/codespace/.gradle/caches/9.4.0/transforms/119fec36dd6cf79795a2fb38435e32a8/transformed/appcompat-1.6.1/res/values-h720dp-v13/values-h720dp-v13.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "66",
+                        "endOffsets": "117"
+                    }
+                }
+            ]
+        }
+    ]
+}
