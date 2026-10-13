@@ -15,6 +15,15 @@ android {
         versionName = "1.0"
     }
 
+    // Keep Java and Kotlin on the SAME JVM target (17). AGP 8.7 fails the build if they differ.
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     buildTypes {
         getByName("debug") {
             isMinifyEnabled = false
