@@ -21,6 +21,7 @@ data class CountItem(
     var lastCount: String,
     var lastDate: String,
     var todayCount: String = "",
+    var location: String = "",
     val userAdded: Boolean = false
 ) {
     val counted: Boolean get() = todayCount.isNotBlank()
@@ -81,6 +82,19 @@ class ItemStore(context: Context) {
     fun barcodesFor(pac: String): List<String> =
         barcodeMap.filterValues { it.equals(pac, true) }.keys.sorted()
     fun allBarcodes(): Map<String, String> = barcodeMap.toSortedMap()
+
+    // --- location (per PAC, e.g. "Rack 3"); stored separately so seed items keep it too ---
+
+    private val locationMap: MutableMap<String, String> = loadLocations()
+
+    fun setLocation(pac: String, location: String) {
+        val p = pac.trim()
+        if (location.isBlank()) locationMap.remove(p) else locationMap[p] = location.trim()
+        byPac(p)?.location = locationMap[p] ?: ""
+        persistLocations()
+    }
+
+    fun locationOf(pac: String): String = locationMap[pac.trim()] ?: ""
 
     fun setCount(pac: String, value: String) {
         byPac(pac)?.let { it.todayCount = value.trim(); persistTodayCounts() }
@@ -186,7 +200,8 @@ class ItemStore(context: Context) {
                     .put("pac", it.pac).put("desc", it.desc).put("uom", it.uom)
                     .put("min", it.min?.toString() ?: "").put("max", it.max?.toString() ?: "")
                     .put("lastCount", it.lastCount).put("lastDate", it.lastDate)
-                    .put("todayCount", it.todayCount).put("userAdded", it.userAdded))
+                    .put("todayCount", it.todayCount).put("location", it.location)
+                    .put("userAdded", it.userAdded))
             }
             data.put("items", itemsArr)
             val bc = JSONObject(); barcodeMap.forEach { (k, v) -> bc.put(k, v) }
@@ -228,11 +243,15 @@ class ItemStore(context: Context) {
                 existing.todayCount = o.optString("todayCount")
                 if (o.optString("lastCount").isNotBlank()) existing.lastCount = o.optString("lastCount")
                 if (o.optString("lastDate").isNotBlank()) existing.lastDate = o.optString("lastDate")
+                val loc = o.optString("location")
+                if (loc.isNotBlank()) { existing.location = loc; locationMap[pac] = loc }
             } else if (o.optBoolean("userAdded")) {
+                val loc = o.optString("location")
                 items.add(CountItem(pac, o.optString("desc"), o.optString("uom"),
                     o.optString("min").toDoubleOrNull(), o.optString("max").toDoubleOrNull(),
                     o.optString("lastCount"), o.optString("lastDate"),
-                    o.optString("todayCount"), userAdded = true))
+                    o.optString("todayCount"), loc, userAdded = true))
+                if (loc.isNotBlank()) locationMap[pac] = loc
             }
         }
         // barcodes
@@ -241,7 +260,7 @@ class ItemStore(context: Context) {
         // photos (keyed by filename = sanitized PAC)
         tmpPhotos.forEach { (name, bytes) -> java.io.File(photoDir(), name).writeBytes(bytes) }
 
-        persistUserItems(); persistTodayCounts(); persistBarcodes()
+        persistUserItems(); persistTodayCounts(); persistBarcodes(); persistLocations()
     }
 
     // --- persistence ---
@@ -257,6 +276,21 @@ class ItemStore(context: Context) {
     private fun persistBarcodes() {
         val o = JSONObject(); barcodeMap.forEach { (k, v) -> o.put(k, v) }
         prefs.edit().putString(KEY_BARCODES, o.toString()).apply()
+    }
+
+    private fun loadLocations(): MutableMap<String, String> {
+        val m = HashMap<String, String>()
+        prefs.getString(KEY_LOCATIONS, null)?.let {
+            val o = JSONObject(it); for (k in o.keys()) m[k] = o.optString(k)
+        }
+        // apply to loaded items
+        items.forEach { it.location = m[it.pac] ?: "" }
+        return m
+    }
+
+    private fun persistLocations() {
+        val o = JSONObject(); locationMap.forEach { (k, v) -> o.put(k, v) }
+        prefs.edit().putString(KEY_LOCATIONS, o.toString()).apply()
     }
 
     private fun sanitize(s: String) = s.replace(Regex("[^A-Za-z0-9_-]"), "_")
@@ -341,6 +375,7 @@ class ItemStore(context: Context) {
         private const val KEY_DATE = "count_date"
         private const val KEY_USER_ITEMS = "user_items"
         private const val KEY_BARCODES = "barcode_links"
+        private const val KEY_LOCATIONS = "item_locations"
         private const val KEY_URL = "sheet_url"
         private const val KEY_EXPORTED = "day_exported"
         const val DEFAULT_SHEET_URL =

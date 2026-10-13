@@ -287,8 +287,25 @@ class MainActivity : Activity() {
         chips.addView(space(6).also { it.layoutParams = LinearLayout.LayoutParams(dp(6), 1) })
         chips.addView(pill("Min ${item.min?.clean() ?: "—"} / Max ${item.max?.clean() ?: "—"}", BTNMUTE, MUTED))
         ic.addView(chips)
+        if (item.location.isNotBlank()) {
+            ic.addView(space(6))
+            ic.addView(pill("📍 ${item.location}", SOFTGREEN, GREEN))
+        }
         page.addView(ic)
-        page.addView(space(16))
+        page.addView(space(14))
+
+        // inline reference photo (above the count), if one exists
+        if (store.hasPhoto(item.pac)) {
+            val iv = ImageView(this).apply {
+                adjustViewBounds = true
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setImageURI(Uri.fromFile(store.photoFile(item.pac)))
+                background = rounded(CARD, HAIRLINE, 14, 1)
+                setOnClickListener { showEditPhotoLocation(item) }
+            }
+            page.addView(iv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(180)))
+            page.addView(space(14))
+        }
 
         page.addView(sectionLabel("TODAY'S COUNT"))
         page.addView(space(10))
@@ -348,9 +365,7 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginStart = dp(7) })
         page.addView(footer)
         page.addView(space(10))
-        page.addView(smallButton(if (store.hasPhoto(item.pac)) "VIEW ITEM PHOTO" else "ADD ITEM PHOTO") {
-            showPhoto(item)
-        })
+        page.addView(smallButton("EDIT PHOTO / LOCATION") { showEditPhotoLocation(item) })
         showPage(page)
     }
 
@@ -592,14 +607,42 @@ class MainActivity : Activity() {
         showPage(page)
     }
 
-    // ---------- PHOTOS (camera or file pick; local per PAC) ----------
+    // ---------- EDIT PHOTO / LOCATION (camera or file pick; rack wheel) ----------
 
-    private fun showPhoto(item: CountItem) {
+    private fun showEditPhotoLocation(item: CountItem) {
         topBar.text = item.pac
         val page = column()
         page.addView(text(item.desc, 16f, TEXT, true))
         page.addView(text(item.pac, 12f, MUTED))
-        page.addView(space(12))
+        page.addView(space(14))
+
+        // --- Location (rack wheel) ---
+        page.addView(sectionLabel("LOCATION"))
+        page.addView(space(8))
+        val rackOptions = listOf("—", "Rack 1", "Rack 2", "Rack 3", "Rack 4", "Rack 5", "Rack 6")
+        val current = item.location.ifBlank { "—" }
+        val startIdx = rackOptions.indexOf(current).let { if (it < 0) 0 else it }
+        val rackPicker = NumberPicker(this).apply {
+            minValue = 0; maxValue = rackOptions.size - 1
+            displayedValues = rackOptions.toTypedArray()
+            value = startIdx; wrapSelectorWheel = false
+            descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
+        }
+        val rackCard = card(); rackCard.addView(rackPicker,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(150)))
+        page.addView(rackCard)
+        page.addView(space(8))
+        page.addView(bigButton("SAVE LOCATION", GREEN) {
+            val sel = rackOptions[rackPicker.value]
+            store.setLocation(item.pac, if (sel == "—") "" else sel)
+            toast(if (sel == "—") "Location cleared." else "Location set to $sel.")
+            showEditPhotoLocation(item)
+        })
+        page.addView(space(18))
+
+        // --- Photo ---
+        page.addView(sectionLabel("PHOTO"))
+        page.addView(space(8))
         if (store.hasPhoto(item.pac)) {
             val iv = ImageView(this).apply {
                 adjustViewBounds = true
@@ -607,24 +650,24 @@ class MainActivity : Activity() {
                 setImageURI(Uri.fromFile(store.photoFile(item.pac)))
                 background = rounded(CARD, HAIRLINE, 14, 1)
             }
-            page.addView(iv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(260)))
-            page.addView(space(14))
+            page.addView(iv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(240)))
+            page.addView(space(12))
             page.addView(bigButton("RETAKE PHOTO", TEAL) { takePhoto(item.pac) })
             page.addView(space(8))
             page.addView(bigButton("CHOOSE FROM FILES", BLUE) { pickImage(item.pac) })
             page.addView(space(8))
-            page.addView(bigButton("REMOVE PHOTO", RED) {
-                store.deletePhoto(item.pac); toast("Photo removed."); showPhoto(item)
+            page.addView(smallButton("REMOVE PHOTO") {
+                store.deletePhoto(item.pac); toast("Photo removed."); showEditPhotoLocation(item)
             })
         } else {
             page.addView(text("No reference photo yet.", 14f, MUTED))
-            page.addView(space(14))
+            page.addView(space(12))
             page.addView(bigButton("TAKE PHOTO", TEAL) { takePhoto(item.pac) })
             page.addView(space(8))
             page.addView(bigButton("CHOOSE FROM FILES", BLUE) { pickImage(item.pac) })
         }
-        page.addView(space(10))
-        page.addView(smallButton("BACK") { showCount(item, false) })
+        page.addView(space(14))
+        page.addView(smallButton("DONE") { showCount(item, false) })
         showPage(page)
     }
 
@@ -713,14 +756,14 @@ class MainActivity : Activity() {
         if (resultCode != Activity.RESULT_OK) return
         when (requestCode) {
             REQ_CAMERA -> {
-                pendingPhotoPac?.let { pac -> store.find(pac)?.let { showPhoto(it) } }
+                pendingPhotoPac?.let { pac -> store.find(pac)?.let { showEditPhotoLocation(it) } }
             }
             REQ_PICK_IMAGE -> {
                 val uri = data?.data ?: return
                 val pac = pendingPhotoPac ?: return
                 try {
                     contentResolver.openInputStream(uri)?.use { store.savePhotoFrom(pac, it) }
-                    store.find(pac)?.let { showPhoto(it) }
+                    store.find(pac)?.let { showEditPhotoLocation(it) }
                 } catch (e: Exception) { toast("Could not import image.") }
             }
             REQ_EXPORT_BACKUP -> {
