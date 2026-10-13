@@ -430,12 +430,16 @@ class MainActivity : Activity() {
     private fun showAddItem(prefill: String?) {
         topBar.text = "ADD ITEM"
         val page = column()
-        val pac = labeledInput("PAC", prefill ?: "")
-        val desc = labeledInput("Description", "")
-        val uom = labeledInput("UOM (e.g. Case)", "")
-        val min = labeledInput("Min on hand", "")
-        val max = labeledInput("Max on hand", "")
-        listOf(pac, desc, uom, min, max).forEach { page.addView(it); page.addView(space(8)) }
+        val pac = labeledInput(prefill ?: "")
+        val desc = labeledInput("")
+        val uom = labeledInput("")
+        val min = labeledInput("")
+        val max = labeledInput("")
+        addLabeled(page, "PAC", pac)
+        addLabeled(page, "Description", desc)
+        addLabeled(page, "UOM (e.g. Case)", uom)
+        addLabeled(page, "Min on hand", min)
+        addLabeled(page, "Max on hand", max)
         page.addView(text("Added items must also exist on the master sheet before counts stick.", 11f, MUTED))
         page.addView(space(10))
         page.addView(bigButton("SAVE ITEM", BLUE) {
@@ -452,11 +456,14 @@ class MainActivity : Activity() {
     private fun showEditItem(item: CountItem) {
         topBar.text = item.pac
         val page = column()
-        val desc = labeledInput("Description", item.desc)
-        val uom = labeledInput("UOM", item.uom)
-        val min = labeledInput("Min", item.min?.clean() ?: "")
-        val max = labeledInput("Max", item.max?.clean() ?: "")
-        listOf(desc, uom, min, max).forEach { page.addView(it); page.addView(space(8)) }
+        val desc = labeledInput(item.desc)
+        val uom = labeledInput(item.uom)
+        val min = labeledInput(item.min?.clean() ?: "")
+        val max = labeledInput(item.max?.clean() ?: "")
+        addLabeled(page, "Description", desc)
+        addLabeled(page, "UOM", uom)
+        addLabeled(page, "Min", min)
+        addLabeled(page, "Max", max)
         page.addView(bigButton("SAVE CHANGES", TEAL) {
             store.updateItem(item.pac, valueOf(desc), valueOf(uom), valueOf(min).toDoubleOrNull(), valueOf(max).toDoubleOrNull())
             toast("Updated."); showManage()
@@ -595,16 +602,18 @@ class MainActivity : Activity() {
 
     private fun valueOf(e: EditText) = e.text.toString().trim()
 
-    private fun labeledInput(label: String, value: String): View {
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        box.addView(text(label, 11f, MUTED, true))
-        box.addView(space(2))
-        box.addView(EditText(this).apply {
-            setText(value); setSingleLine(); typeface = mono; textSize = 15f
-            background = rounded(CARD, LIGHTBORDER, 10, 1); setPadding(dp(12), dp(8), dp(12), dp(8))
-            tag = "input"
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)))
-        return box
+    /** Returns the EditText itself (so valueOf type-checks); use addLabeled() to place it. */
+    private fun labeledInput(value: String): EditText = EditText(this).apply {
+        setText(value); setSingleLine(); typeface = mono; textSize = 15f
+        background = rounded(CARD, LIGHTBORDER, 10, 1); setPadding(dp(12), dp(8), dp(12), dp(8))
+    }
+
+    /** Adds a label + the given field (with spacing) to the page column. */
+    private fun addLabeled(page: LinearLayout, label: String, field: EditText) {
+        page.addView(text(label, 11f, MUTED, true))
+        page.addView(space(2))
+        page.addView(field, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)))
+        page.addView(space(8))
     }
 
     private fun showPage(view: View) {
