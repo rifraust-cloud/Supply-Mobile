@@ -1,0 +1,335 @@
+[
+  {
+    "pac": "PAC99439",
+    "desc": "Recyclable Jiffy Mailer JM2",
+    "uom": "Box",
+    "min": "10",
+    "max": "15",
+    "lastCount": "13",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "COR10793",
+    "desc": "Amazon style small box - BOX 20",
+    "uom": "Bundle",
+    "min": "20",
+    "max": "30",
+    "lastCount": "19",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "COR10873",
+    "desc": "Amazon style medium box - Box 130",
+    "uom": "Bundle",
+    "min": "4",
+    "max": "8",
+    "lastCount": "7",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "COR92043",
+    "desc": "Uline 12 cube boxes",
+    "uom": "Bundle",
+    "min": "2",
+    "max": "3",
+    "lastCount": "4",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13180",
+    "desc": "Centor 75cc bottle",
+    "uom": "Case",
+    "min": "11",
+    "max": "15",
+    "lastCount": "12",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13181",
+    "desc": "Centor 120cc bottle",
+    "uom": "Case",
+    "min": "2",
+    "max": "3",
+    "lastCount": "3",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13182",
+    "desc": "Centor 200cc bottle",
+    "uom": "Case",
+    "min": "1",
+    "max": "2",
+    "lastCount": "7",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13183",
+    "desc": "Centor AP Bottle Caps",
+    "uom": "Case",
+    "min": "4",
+    "max": "6",
+    "lastCount": "7",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13124",
+    "desc": "2oz Liquid Bottle",
+    "uom": "Each",
+    "min": "5",
+    "max": "10",
+    "lastCount": "20",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13125",
+    "desc": "4oz Liquid Bottle",
+    "uom": "Each",
+    "min": "5",
+    "max": "10",
+    "lastCount": "16",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13126",
+    "desc": "8oz Liquid Bottle",
+    "uom": "Each",
+    "min": "5",
+    "max": "10",
+    "lastCount": "19",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13127",
+    "desc": "16oz Liquid Bottle",
+    "uom": "Each",
+    "min": "5",
+    "max": "10",
+    "lastCount": "12",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13128",
+    "desc": "5 ML Syringe + PIBA Adapter",
+    "uom": "Each",
+    "min": "25",
+    "max": "50",
+    "lastCount": "38",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13094",
+    "desc": "Reclosable Poly Bags 10\" x 12\" - 2 Mil",
+    "uom": "Case",
+    "min": "0.5",
+    "max": "1.5",
+    "lastCount": "1.5",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC99102",
+    "desc": "Prime VNM Generic Branded WAT Tape",
+    "uom": "Case",
+    "min": "1",
+    "max": "2",
+    "lastCount": "1.5",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13164",
+    "desc": "Copy Paper 8.5 x 11",
+    "uom": "Case",
+    "min": "3",
+    "max": "5",
+    "lastCount": "6",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13150",
+    "desc": "Parata Max AP label blank",
+    "uom": "Case",
+    "min": "2",
+    "max": "3",
+    "lastCount": "5",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "OTH16828582",
+    "desc": "\"Destroy Medication\" Note Pad",
+    "uom": "Pad",
+    "min": "1",
+    "max": "2",
+    "lastCount": "2",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13160",
+    "desc": "1ml Oral Syringe",
+    "uom": "Each",
+    "min": "5",
+    "max": "10",
+    "lastCount": "13",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13161",
+    "desc": "10ml Oral Syringe",
+    "uom": "Each",
+    "min": "5",
+    "max": "10",
+    "lastCount": "17",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13037",
+    "desc": "Industrial Security Tape - \"If Seal is Broken\"",
+    "uom": "Roll",
+    "min": "0.5",
+    "max": "1",
+    "lastCount": "1",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13122",
+    "desc": "Bulk Labels w/o logo AP 3.75\" x 2.1875",
+    "uom": "Case",
+    "min": "2",
+    "max": "3",
+    "lastCount": "1",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC40201",
+    "desc": "Hip label printer BPS Free",
+    "uom": "Case",
+    "min": "0.05",
+    "max": "1.5",
+    "lastCount": "0",
+    "lastDate": "2/9/2026"
+  },
+  {
+    "pac": "PAC40272",
+    "desc": "4x6 1\" Core Direct Thermal Shipping Label BPS Free",
+    "uom": "Case",
+    "min": "0",
+    "max": "0",
+    "lastCount": "0",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13184",
+    "desc": "24OZ Gel Packs Nordic",
+    "uom": "Case",
+    "min": "20",
+    "max": "40",
+    "lastCount": "72",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13171",
+    "desc": "12oz Gel Pack",
+    "uom": "Case",
+    "min": "0",
+    "max": "0",
+    "lastCount": "0",
+    "lastDate": "9/8/2026"
+  },
+  {
+    "pac": "COR92040",
+    "desc": "7 x 5 x 2 Cold Chain Mailer Box",
+    "uom": "Bundle",
+    "min": "1",
+    "max": "3",
+    "lastCount": "4",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13172",
+    "desc": "Ranpak 30 lb Craft Paper",
+    "uom": "Case",
+    "min": "2",
+    "max": "3",
+    "lastCount": "1",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "FSH20250V",
+    "desc": "Prime Branded \"Chill Bags\"",
+    "uom": "Case",
+    "min": "0",
+    "max": "0",
+    "lastCount": "0",
+    "lastDate": "9/8/2026"
+  },
+  {
+    "pac": "PAC13206",
+    "desc": "Nordic 1\" SF Cold chain mailer",
+    "uom": "Case",
+    "min": "4",
+    "max": "8",
+    "lastCount": "12",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13191",
+    "desc": "9\" x 12\" Bubble Bag (Rolled)",
+    "uom": "Roll",
+    "min": "2",
+    "max": "3",
+    "lastCount": "5",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13193",
+    "desc": "3\" x 5\" \"Perishable\" Label",
+    "uom": "Roll",
+    "min": "1",
+    "max": "2",
+    "lastCount": "3",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC40109",
+    "desc": "Lithium Battery Handling Mark w Barcode UN3481",
+    "uom": "Each",
+    "min": "0.5",
+    "max": "1.5",
+    "lastCount": "2",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC40111",
+    "desc": "Hazmat Handling Label w/ Barcode UN3091 NEW",
+    "uom": "Each",
+    "min": "0.5",
+    "max": "1.5",
+    "lastCount": "2",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13207",
+    "desc": "Cold Chain Insert V2",
+    "uom": "Case",
+    "min": "0.5",
+    "max": "1",
+    "lastCount": "1",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC13208",
+    "desc": "CRT Insert V2",
+    "uom": "Case",
+    "min": "0.5",
+    "max": "1",
+    "lastCount": "1",
+    "lastDate": "10/13/2026"
+  },
+  {
+    "pac": "PAC40211",
+    "desc": "LABEL,\u00a0 DIRECT THERMAL, PAPER 8 IN OD, 4 IN X 6 IN",
+    "uom": "Case",
+    "min": "2",
+    "max": "3",
+    "lastCount": "2",
+    "lastDate": "10/13/2026"
+  }
+]
