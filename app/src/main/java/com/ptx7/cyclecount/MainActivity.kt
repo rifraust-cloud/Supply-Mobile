@@ -10,6 +10,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.text.InputType
 import android.view.Gravity
 import android.view.KeyEvent
@@ -19,6 +20,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.NumberPicker
 import android.widget.ProgressBar
@@ -26,13 +28,17 @@ import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.FileProvider
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * PTX7 Cycle Count — scanning via the Point Mobile PM86 built-in hardware scanner
- * (keyboard-wedge mode). No camera, no ML Kit, no photos. Offline, paste-to-sheet export.
+ * (keyboard-wedge mode). No camera scanning. Local offline data, paste-to-sheet export.
  *
- * Flow: checklist home -> scan (wedge) / tap item -> count (wheel or manual) -> confirm
- *       -> save & next. Export copies a vertical column and opens the master sheet.
+ * Features: checklist home, wheel/manual count, confirm, per-PAC reference photos
+ * (camera or file pick), barcode->PAC reverse-lookup links, and zip backup/restore.
  */
 class MainActivity : Activity() {
 
@@ -51,6 +57,11 @@ class MainActivity : Activity() {
         const val BG = "#F2F5F8"
         const val CARD = "#FFFFFF"
         const val BTNMUTE = "#EDF1F4"
+
+        const val REQ_CAMERA = 101
+        const val REQ_PICK_IMAGE = 102
+        const val REQ_EXPORT_BACKUP = 103
+        const val REQ_IMPORT_BACKUP = 104
     }
 
     private lateinit var store: ItemStore
@@ -58,11 +69,21 @@ class MainActivity : Activity() {
     private lateinit var contentHolder: FrameLayout
     private val mono = Typeface.MONOSPACE
 
+    /** True when the current screen is Home (controls Back = exit vs. Back = go home). */
+    private var onHome = true
+
+    /** PAC awaiting a photo result (camera or file pick). */
+    private var pendingPhotoPac: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = ItemStore(this)
         buildShell()
         showHome()
+    }
+
+    override fun onBackPressed() {
+        if (onHome) super.onBackPressed() else showHome()
     }
 
     // ---------- shell ----------
@@ -91,6 +112,7 @@ class MainActivity : Activity() {
     // ---------- HOME (checklist) ----------
 
     private fun showHome() {
+        onHome = true
         topBar.text = "CYCLE  COUNT"
         val page = column()
 
@@ -139,7 +161,7 @@ class MainActivity : Activity() {
             page.addView(checklistRow(item))
             page.addView(space(8))
         }
-        showPage(page)
+        showPage(page, home = true)
     }
 
     private fun checklistRow(item: CountItem): View {
@@ -237,6 +259,8 @@ class MainActivity : Activity() {
         page.addView(space(18))
         page.addView(bigButton("SCAN AGAIN", TEAL) { scan(individual) })
         page.addView(space(8))
+        page.addView(bigButton("LINK TO AN ITEM", GREEN) { showLinkBarcode(raw) })
+        page.addView(space(8))
         page.addView(bigButton("ADD THIS PAC", BLUE) { showAddItem(prefill = raw) })
         page.addView(space(8))
         page.addView(smallButton("BACK TO HOME") { showHome() })
@@ -323,6 +347,10 @@ class MainActivity : Activity() {
             showConfirm(item, v, individual)
         }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginStart = dp(7) })
         page.addView(footer)
+        page.addView(space(10))
+        page.addView(smallButton(if (store.hasPhoto(item.pac)) "VIEW ITEM PHOTO" else "ADD ITEM PHOTO") {
+            showPhoto(item)
+        })
         showPage(page)
     }
 
@@ -384,6 +412,8 @@ class MainActivity : Activity() {
         page.addView(bigButton("ADD ITEM", BLUE) { showAddItem(null) })
         page.addView(space(10))
         page.addView(smallButton("SHEET LINK") { showUrlSettings() })
+        page.addView(space(8))
+        page.addView(smallButton("BACKUP / RESTORE") { showBackup() })
         page.addView(space(18))
         page.addView(sectionLabel("TAP AN ITEM TO EDIT OR DELETE"))
         page.addView(space(10))
@@ -562,6 +592,155 @@ class MainActivity : Activity() {
         showPage(page)
     }
 
+    // ---------- PHOTOS (camera or file pick; local per PAC) ----------
+
+    private fun showPhoto(item: CountItem) {
+        topBar.text = item.pac
+        val page = column()
+        page.addView(text(item.desc, 16f, TEXT, true))
+        page.addView(text(item.pac, 12f, MUTED))
+        page.addView(space(12))
+        if (store.hasPhoto(item.pac)) {
+            val iv = ImageView(this).apply {
+                adjustViewBounds = true
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setImageURI(Uri.fromFile(store.photoFile(item.pac)))
+                background = rounded(CARD, HAIRLINE, 14, 1)
+            }
+            page.addView(iv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(260)))
+            page.addView(space(14))
+            page.addView(bigButton("RETAKE PHOTO", TEAL) { takePhoto(item.pac) })
+            page.addView(space(8))
+            page.addView(bigButton("CHOOSE FROM FILES", BLUE) { pickImage(item.pac) })
+            page.addView(space(8))
+            page.addView(bigButton("REMOVE PHOTO", RED) {
+                store.deletePhoto(item.pac); toast("Photo removed."); showPhoto(item)
+            })
+        } else {
+            page.addView(text("No reference photo yet.", 14f, MUTED))
+            page.addView(space(14))
+            page.addView(bigButton("TAKE PHOTO", TEAL) { takePhoto(item.pac) })
+            page.addView(space(8))
+            page.addView(bigButton("CHOOSE FROM FILES", BLUE) { pickImage(item.pac) })
+        }
+        page.addView(space(10))
+        page.addView(smallButton("BACK") { showCount(item, false) })
+        showPage(page)
+    }
+
+    private fun takePhoto(pac: String) {
+        pendingPhotoPac = pac
+        val file = store.photoFile(pac)
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+            .putExtra(MediaStore.EXTRA_OUTPUT, uri)
+            .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        if (intent.resolveActivity(packageManager) != null) startActivityForResult(intent, REQ_CAMERA)
+        else toast("No camera app found.")
+    }
+
+    private fun pickImage(pac: String) {
+        pendingPhotoPac = pac
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply { type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE) }
+        startActivityForResult(Intent.createChooser(intent, "Choose image"), REQ_PICK_IMAGE)
+    }
+
+    // ---------- BARCODE -> PAC association ----------
+
+    private fun showLinkBarcode(barcode: String) {
+        topBar.text = "LINK BARCODE"
+        val page = column()
+        val c = card()
+        c.addView(text("BARCODE", 11f, MUTED, true)); c.addView(space(4))
+        c.addView(text(barcode, 18f, TEALDK, true))
+        page.addView(c)
+        page.addView(space(14))
+        page.addView(text("Enter the PAC this barcode belongs to:", 13f, MUTED))
+        page.addView(space(8))
+        val pacField = labeledInput("")
+        addLabeled(page, "PAC", pacField)
+        page.addView(bigButton("LINK", GREEN) {
+            val pac = valueOf(pacField)
+            if (store.linkBarcode(barcode, pac)) {
+                toast("Linked $barcode → $pac")
+                store.find(pac)?.let { showCount(it, false) } ?: showHome()
+            } else toast("Unknown PAC — add it first.")
+        })
+        page.addView(space(8))
+        page.addView(smallButton("CANCEL") { showHome() })
+        showPage(page)
+    }
+
+    // ---------- BACKUP / RESTORE ----------
+
+    private fun showBackup() {
+        topBar.text = "BACKUP / RESTORE"
+        val page = column()
+        page.addView(text("Portable backup", 18f, TEXT, true))
+        page.addView(space(6))
+        page.addView(text("Saves items, counts, barcode links, and photos to a .zip you can keep and import into a new version.", 13f, MUTED))
+        page.addView(space(16))
+        page.addView(bigButton("EXPORT BACKUP (.zip)", GREEN) { startExportBackup() })
+        page.addView(space(8))
+        page.addView(bigButton("IMPORT BACKUP (.zip)", BLUE) { startImportBackup() })
+        page.addView(space(10))
+        page.addView(smallButton("BACK") { showManage() })
+        showPage(page)
+    }
+
+    private fun startExportBackup() {
+        val name = "ptx7-cycle-count-backup-" +
+            SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".zip"
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE); type = "application/zip"
+            putExtra(Intent.EXTRA_TITLE, name)
+        }
+        startActivityForResult(intent, REQ_EXPORT_BACKUP)
+    }
+
+    private fun startImportBackup() {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE); type = "application/zip"
+        }
+        startActivityForResult(Intent.createChooser(intent, "Choose backup .zip"), REQ_IMPORT_BACKUP)
+    }
+
+    // ---------- activity results ----------
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != Activity.RESULT_OK) return
+        when (requestCode) {
+            REQ_CAMERA -> {
+                pendingPhotoPac?.let { pac -> store.find(pac)?.let { showPhoto(it) } }
+            }
+            REQ_PICK_IMAGE -> {
+                val uri = data?.data ?: return
+                val pac = pendingPhotoPac ?: return
+                try {
+                    contentResolver.openInputStream(uri)?.use { store.savePhotoFrom(pac, it) }
+                    store.find(pac)?.let { showPhoto(it) }
+                } catch (e: Exception) { toast("Could not import image.") }
+            }
+            REQ_EXPORT_BACKUP -> {
+                val uri = data?.data ?: return
+                try {
+                    contentResolver.openOutputStream(uri)?.use { store.writeBackup(it) }
+                    toast("Backup saved.")
+                } catch (e: Exception) { toast("Backup failed: ${e.message}") }
+            }
+            REQ_IMPORT_BACKUP -> {
+                val uri = data?.data ?: return
+                try {
+                    contentResolver.openInputStream(uri)?.use { store.readBackup(it) }
+                    toast("Backup imported.")
+                    showHome()
+                } catch (e: Exception) { toast("Import failed: ${e.message}") }
+            }
+        }
+    }
+
     // ---------- helpers ----------
 
     private fun closestIndex(values: List<Double>, target: Double): Int {
@@ -596,7 +775,9 @@ class MainActivity : Activity() {
         background = rounded(fill, fill, 20, 0)
     }
 
-    private fun showPage(view: View) {
+    private fun showPage(view: View, home: Boolean = false) {
+        onHome = home
+        if (!home && !topBar.text.startsWith("‹")) topBar.text = "‹  ${topBar.text}"
         contentHolder.removeAllViews()
         val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(Color.parseColor(BG)) }
         scroll.addView(view)

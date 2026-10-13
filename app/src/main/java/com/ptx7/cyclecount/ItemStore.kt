@@ -46,6 +46,9 @@ class ItemStore(context: Context) {
     val items: MutableList<CountItem> = loadItems()
     private fun byPac(pac: String) = items.firstOrNull { it.pac.equals(pac, true) }
 
+    /** barcode (raw scanned value) -> PAC, for reverse lookups of box/manufacturer codes. */
+    private val barcodeMap: MutableMap<String, String> = loadBarcodes()
+
     init {
         rolloverIfNewDay()
         restoreTodayCounts()
@@ -55,10 +58,29 @@ class ItemStore(context: Context) {
 
     fun find(scanned: String): CountItem? {
         val key = scanned.trim()
+        // 1) direct PAC match
         byPac(key)?.let { return it }
+        // 2) saved barcode -> PAC association (reverse lookup)
+        barcodeMap[key]?.let { pac -> byPac(pac)?.let { return it } }
+        // 3) loose contains-match on PAC (label with extra chars)
         val upper = key.uppercase(Locale.US)
         return items.firstOrNull { upper.contains(it.pac.uppercase(Locale.US)) }
     }
+
+    // --- barcode <-> PAC associations ---
+
+    /** Link an arbitrary scanned barcode to a PAC. Returns false if the PAC is unknown. */
+    fun linkBarcode(barcode: String, pac: String): Boolean {
+        val b = barcode.trim(); if (b.isEmpty() || byPac(pac) == null) return false
+        barcodeMap[b] = pac
+        persistBarcodes()
+        return true
+    }
+
+    fun unlinkBarcode(barcode: String) { barcodeMap.remove(barcode.trim()); persistBarcodes() }
+    fun barcodesFor(pac: String): List<String> =
+        barcodeMap.filterValues { it.equals(pac, true) }.keys.sorted()
+    fun allBarcodes(): Map<String, String> = barcodeMap.toSortedMap()
 
     fun setCount(pac: String, value: String) {
         byPac(pac)?.let { it.todayCount = value.trim(); persistTodayCounts() }
@@ -86,6 +108,9 @@ class ItemStore(context: Context) {
 
     fun deleteItem(pac: String) {
         items.removeAll { it.pac.equals(pac, true) }
+        deletePhoto(pac)
+        barcodeMap.entries.removeAll { it.value.equals(pac, true) }
+        persistBarcodes()
         persistUserItems()
         persistTodayCounts()
     }
@@ -135,7 +160,106 @@ class ItemStore(context: Context) {
     fun sheetUrl(): String = prefs.getString(KEY_URL, DEFAULT_SHEET_URL) ?: DEFAULT_SHEET_URL
     fun setSheetUrl(url: String) { prefs.edit().putString(KEY_URL, url.trim()).apply() }
 
+    // --- photos (local, per PAC) ---
+
+    fun photoDir(): java.io.File = java.io.File(appContext.filesDir, "photos").apply { mkdirs() }
+    fun photoFile(pac: String): java.io.File = java.io.File(photoDir(), sanitize(pac) + ".jpg")
+    fun hasPhoto(pac: String): Boolean = photoFile(pac).exists()
+    fun deletePhoto(pac: String) { photoFile(pac).takeIf { it.exists() }?.delete() }
+
+    /** Copy an arbitrary input stream (camera result or picked file) into this PAC's photo. */
+    fun savePhotoFrom(pac: String, input: java.io.InputStream) {
+        photoFile(pac).outputStream().use { out -> input.copyTo(out) }
+    }
+
+    // --- backup / restore (one .zip: data.json + photos/) ---
+
+    /** Write a full backup (items + counts + barcodes + photos) to the given output stream. */
+    fun writeBackup(out: java.io.OutputStream) {
+        java.util.zip.ZipOutputStream(out).use { zip ->
+            // data.json
+            val data = JSONObject()
+            data.put("date", countDate())
+            val itemsArr = JSONArray()
+            items.forEach {
+                itemsArr.put(JSONObject()
+                    .put("pac", it.pac).put("desc", it.desc).put("uom", it.uom)
+                    .put("min", it.min?.toString() ?: "").put("max", it.max?.toString() ?: "")
+                    .put("lastCount", it.lastCount).put("lastDate", it.lastDate)
+                    .put("todayCount", it.todayCount).put("userAdded", it.userAdded))
+            }
+            data.put("items", itemsArr)
+            val bc = JSONObject(); barcodeMap.forEach { (k, v) -> bc.put(k, v) }
+            data.put("barcodes", bc)
+            zip.putNextEntry(java.util.zip.ZipEntry("data.json"))
+            zip.write(data.toString().toByteArray()); zip.closeEntry()
+            // photos/
+            photoDir().listFiles()?.forEach { f ->
+                zip.putNextEntry(java.util.zip.ZipEntry("photos/" + f.name))
+                f.inputStream().use { it.copyTo(zip) }; zip.closeEntry()
+            }
+        }
+    }
+
+    /** Restore from a backup zip. Replaces user items, counts, barcodes, and photos. */
+    fun readBackup(input: java.io.InputStream) {
+        val tmpPhotos = HashMap<String, ByteArray>()
+        var dataJson: String? = null
+        java.util.zip.ZipInputStream(input).use { zip ->
+            var e = zip.nextEntry
+            while (e != null) {
+                if (e.name == "data.json") {
+                    dataJson = zip.readBytes().decodeToString()
+                } else if (e.name.startsWith("photos/") && !e.isDirectory) {
+                    tmpPhotos[e.name.substringAfter("photos/")] = zip.readBytes()
+                }
+                zip.closeEntry(); e = zip.nextEntry
+            }
+        }
+        val data = JSONObject(dataJson ?: return)
+
+        // rebuild user-added items + merge counts/last into existing (match by PAC)
+        val itemsArr = data.optJSONArray("items") ?: JSONArray()
+        for (i in 0 until itemsArr.length()) {
+            val o = itemsArr.getJSONObject(i)
+            val pac = o.optString("pac")
+            val existing = byPac(pac)
+            if (existing != null) {
+                existing.todayCount = o.optString("todayCount")
+                if (o.optString("lastCount").isNotBlank()) existing.lastCount = o.optString("lastCount")
+                if (o.optString("lastDate").isNotBlank()) existing.lastDate = o.optString("lastDate")
+            } else if (o.optBoolean("userAdded")) {
+                items.add(CountItem(pac, o.optString("desc"), o.optString("uom"),
+                    o.optString("min").toDoubleOrNull(), o.optString("max").toDoubleOrNull(),
+                    o.optString("lastCount"), o.optString("lastDate"),
+                    o.optString("todayCount"), userAdded = true))
+            }
+        }
+        // barcodes
+        val bc = data.optJSONObject("barcodes")
+        if (bc != null) { barcodeMap.clear(); for (k in bc.keys()) barcodeMap[k] = bc.optString(k) }
+        // photos (keyed by filename = sanitized PAC)
+        tmpPhotos.forEach { (name, bytes) -> java.io.File(photoDir(), name).writeBytes(bytes) }
+
+        persistUserItems(); persistTodayCounts(); persistBarcodes()
+    }
+
     // --- persistence ---
+
+    private fun loadBarcodes(): MutableMap<String, String> {
+        val m = HashMap<String, String>()
+        prefs.getString(KEY_BARCODES, null)?.let {
+            val o = JSONObject(it); for (k in o.keys()) m[k] = o.optString(k)
+        }
+        return m
+    }
+
+    private fun persistBarcodes() {
+        val o = JSONObject(); barcodeMap.forEach { (k, v) -> o.put(k, v) }
+        prefs.edit().putString(KEY_BARCODES, o.toString()).apply()
+    }
+
+    private fun sanitize(s: String) = s.replace(Regex("[^A-Za-z0-9_-]"), "_")
 
     private fun persistTodayCounts() {
         val json = JSONObject()
@@ -216,6 +340,7 @@ class ItemStore(context: Context) {
         private const val KEY_COUNTS = "today_counts"
         private const val KEY_DATE = "count_date"
         private const val KEY_USER_ITEMS = "user_items"
+        private const val KEY_BARCODES = "barcode_links"
         private const val KEY_URL = "sheet_url"
         private const val KEY_EXPORTED = "day_exported"
         const val DEFAULT_SHEET_URL =
