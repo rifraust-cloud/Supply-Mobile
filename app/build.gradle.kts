@@ -32,9 +32,10 @@ android {
 }
 
 dependencies {
-    // Google's prebuilt one-tap barcode scanner UI (same proven approach as PIMS Mobile).
-    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
-    // FileProvider + ContextCompat for photo capture and intents.
+    // Scanning is handled by the Point Mobile PM86 built-in hardware scanner in
+    // keyboard-wedge mode (EmKit ScanSettings: Result type = Keyboard Event, Terminator = LF).
+    // The app captures the wedge keystrokes in a focused field -- no camera/ML Kit needed.
+    // (Camera scanner intentionally removed; can be re-added later if required.)
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-ktx:1.9.3")
 }

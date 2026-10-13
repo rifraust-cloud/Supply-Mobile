@@ -3,7 +3,6 @@ package com.ptx7.cyclecount
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -36,7 +35,7 @@ data class CountItem(
 
 /**
  * Loads the item list (seed + user-added), persists today's counts locally (offline-first),
- * tracks per-PAC photo files, and builds the paste-ready export column.
+ * and builds the paste-ready export column.
  * No networking: Build 1 is scan -> count -> export only.
  */
 class ItemStore(context: Context) {
@@ -87,7 +86,6 @@ class ItemStore(context: Context) {
 
     fun deleteItem(pac: String) {
         items.removeAll { it.pac.equals(pac, true) }
-        photoFile(pac).takeIf { it.exists() }?.delete()
         persistUserItems()
         persistTodayCounts()
     }
@@ -98,13 +96,6 @@ class ItemStore(context: Context) {
         }
         persistUserItems()
     }
-
-    // --- photos (local, per PAC) ---
-
-    fun photoDir(): File = File(appContext.filesDir, "photos").apply { mkdirs() }
-    fun photoFile(pac: String): File = File(photoDir(), sanitize(pac) + ".jpg")
-    fun hasPhoto(pac: String): Boolean = photoFile(pac).exists()
-    fun deletePhoto(pac: String) { photoFile(pac).takeIf { it.exists() }?.delete() }
 
     // --- export (Build 1 Option A: vertical column, blank for uncounted) ---
 
@@ -220,7 +211,6 @@ class ItemStore(context: Context) {
         if (v.contains(',') || v.contains('"') || v.contains('\n'))
             "\"" + v.replace("\"", "\"\"") + "\"" else v
 
-    private fun sanitize(s: String) = s.replace(Regex("[^A-Za-z0-9_-]"), "_")
 
     companion object {
         private const val KEY_COUNTS = "today_counts"

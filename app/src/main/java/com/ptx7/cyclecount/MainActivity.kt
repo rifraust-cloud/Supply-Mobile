@@ -10,15 +10,15 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
-import android.provider.MediaStore
 import android.text.InputType
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.NumberPicker
 import android.widget.ProgressBar
@@ -26,17 +26,13 @@ import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
 import android.widget.Toast
-import androidx.core.content.FileProvider
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
-import java.io.File
 
 /**
- * PTX7 Cycle Count — full build.
- * Scheme: monospace, teal/white/navy, big type, picker wheel + manual entry, giant confirm.
- * Flow: checklist home -> scan/select -> count (wheel or manual) -> confirm -> save & next.
- * Export: copy vertical column + open the master sheet; user pastes. No backend, offline.
+ * PTX7 Cycle Count — scanning via the Point Mobile PM86 built-in hardware scanner
+ * (keyboard-wedge mode). No camera, no ML Kit, no photos. Offline, paste-to-sheet export.
+ *
+ * Flow: checklist home -> scan (wedge) / tap item -> count (wheel or manual) -> confirm
+ *       -> save & next. Export copies a vertical column and opens the master sheet.
  */
 class MainActivity : Activity() {
 
@@ -44,28 +40,23 @@ class MainActivity : Activity() {
         const val TEAL = "#0E7C86"
         const val TEALDK = "#0A5A62"
         const val NAVY = "#13293D"
-        const val GREEN = "#209447"
+        const val GREEN = "#1F9E54"
         const val BLUE = "#1764C0"
         const val RED = "#C0291F"
-        const val TEXT = "#13293D"
-        const val MUTED = "#8794A1"
-        const val BORDER = "#0E7C86"
-        const val LIGHTBORDER = "#D5DEE4"
-        const val SELBG = "#E4F1F2"
-        const val BG = "#F4F7F9"
+        const val TEXT = "#1B2B3A"
+        const val MUTED = "#7C8A97"
+        const val HAIRLINE = "#E3E9EE"
+        const val SOFTGREEN = "#EAF6EF"
+        const val SOFTTEAL = "#E8F3F4"
+        const val BG = "#F2F5F8"
         const val CARD = "#FFFFFF"
-        const val BTNMUTE = "#E6EAED"
+        const val BTNMUTE = "#EDF1F4"
     }
 
     private lateinit var store: ItemStore
     private lateinit var topBar: TextView
     private lateinit var contentHolder: FrameLayout
     private val mono = Typeface.MONOSPACE
-
-    // photo capture state
-    private var pendingPhotoPac: String? = null
-    private val REQ_PHOTO = 42
-    private var afterPhoto: (() -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,9 +74,10 @@ class MainActivity : Activity() {
         }
         topBar = TextView(this).apply {
             text = "CYCLE  COUNT"
-            textSize = 20f
+            textSize = 19f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
+            letterSpacing = 0.08f
             typeface = Typeface.create(mono, Typeface.BOLD)
             setBackgroundColor(Color.parseColor(TEAL))
             setOnClickListener { showHome() }
@@ -96,53 +88,53 @@ class MainActivity : Activity() {
         setContentView(page)
     }
 
-    // ---------- HOME (Option 3: checklist) ----------
+    // ---------- HOME (checklist) ----------
 
     private fun showHome() {
         topBar.text = "CYCLE  COUNT"
         val page = column()
 
-        // progress header
         val counted = store.countedTotal(); val total = store.total()
         val below = store.belowMinimum().size
+
+        // progress card
         val header = card()
         val headRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        headRow.addView(text("$counted / $total", 22f, TEXT, true),
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.9f))
-        headRow.addView(text(store.countDate(), 13f, MUTED, true))
+        headRow.addView(text("$counted / $total", 26f, TEXT, true),
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        headRow.addView(pill(store.countDate(), SOFTTEAL, TEALDK))
         header.addView(headRow)
-        header.addView(space(8))
+        header.addView(space(10))
         val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = if (total == 0) 1 else total; progress = counted
         }
-        header.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(12)))
-        header.addView(space(6))
+        header.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(10)))
+        header.addView(space(8))
         header.addView(text(
             "${store.remaining().size} remaining" + if (below > 0) "   ·   $below below min" else "",
             13f, if (below > 0) RED else MUTED, true))
         page.addView(header)
-        page.addView(space(12))
+        page.addView(space(14))
 
-        // action bar: SCAN + EXPORT
+        // primary actions
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(bigButton("⟐ SCAN", TEAL) { scan(individual = false) },
-            LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginEnd = dp(6) })
-        actions.addView(bigButton("⇪ EXPORT", GREEN) { showExport() },
-            LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginStart = dp(6) })
+        actions.addView(bigButton("SCAN", TEAL) { scan(individual = false) },
+            LinearLayout.LayoutParams(0, dp(58), 1f).apply { marginEnd = dp(7) })
+        actions.addView(bigButton("EXPORT", GREEN) { showExport() },
+            LinearLayout.LayoutParams(0, dp(58), 1f).apply { marginStart = dp(7) })
         page.addView(actions)
         page.addView(space(10))
 
         val sub = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         sub.addView(smallButton("INDIVIDUAL UPDATE") { scan(individual = true) },
-            LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginEnd = dp(6) })
+            LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginEnd = dp(7) })
         sub.addView(smallButton("MANAGE ITEMS") { showManage() },
-            LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginStart = dp(6) })
+            LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginStart = dp(7) })
         page.addView(sub)
-        page.addView(space(14))
+        page.addView(space(18))
 
-        // checklist
-        page.addView(text("ITEMS", 13f, NAVY, true))
-        page.addView(space(8))
+        page.addView(sectionLabel("ITEMS"))
+        page.addView(space(10))
         store.items.forEach { item ->
             page.addView(checklistRow(item))
             page.addView(space(8))
@@ -151,59 +143,101 @@ class MainActivity : Activity() {
     }
 
     private fun checklistRow(item: CountItem): View {
+        val fill = when {
+            item.belowMinimum -> "#FCEEEC"
+            item.counted -> SOFTGREEN
+            else -> CARD
+        }
+        val stroke = if (item.belowMinimum) RED else HAIRLINE
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            background = rounded(CARD, if (item.belowMinimum) RED else LIGHTBORDER, 12, if (item.belowMinimum) 2 else 1)
+            setPadding(dp(14), dp(13), dp(14), dp(13))
+            background = rounded(fill, stroke, 14, if (item.belowMinimum) 2 else 1)
             setOnClickListener { showCount(item, individual = false) }
         }
-        // check indicator
         val check = TextView(this).apply {
             text = if (item.counted) "●" else "○"
-            textSize = 22f
-            typeface = mono
-            setTextColor(Color.parseColor(if (item.counted) GREEN else MUTED))
+            textSize = 20f; typeface = mono
+            setTextColor(Color.parseColor(if (item.counted) GREEN else "#C3CDD5"))
         }
-        row.addView(check, LinearLayout.LayoutParams(dp(30), ViewGroup.LayoutParams.WRAP_CONTENT))
-        val words = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, 0, 0) }
+        row.addView(check, LinearLayout.LayoutParams(dp(28), ViewGroup.LayoutParams.WRAP_CONTENT))
+        val words = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
         words.addView(text(item.pac, 13f, BLUE, true))
+        words.addView(space(1))
         words.addView(text(item.desc, 13f, TEXT))
         row.addView(words, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val value = if (item.counted) item.todayCount else "—"
-        row.addView(text(value, 18f, if (item.belowMinimum) RED else TEXT, true))
+        row.addView(text(if (item.counted) item.todayCount else "—", 19f,
+            if (item.belowMinimum) RED else TEXT, true))
         return row
     }
 
-    // ---------- scanning ----------
+    // ---------- scanning (PM86 keyboard-wedge) ----------
 
+    /**
+     * Point Mobile PM86 built-in scanner, keyboard-wedge mode (EmKit ScanSettings:
+     * Result type = Keyboard Event, Terminator = LF). The trigger types the PAC into the
+     * focused field and sends Enter/LF; we read it and route to the item. No camera.
+     * (Camera scanning intentionally removed; can be re-added later if ever needed.)
+     */
     private fun scan(individual: Boolean) {
-        val options = GmsBarcodeScannerOptions.Builder()
-            .setBarcodeFormats(
-                Barcode.FORMAT_CODE_128, Barcode.FORMAT_CODE_39, Barcode.FORMAT_QR_CODE,
-                Barcode.FORMAT_DATA_MATRIX, Barcode.FORMAT_EAN_13, Barcode.FORMAT_UPC_A)
-            .enableAutoZoom().build()
-        GmsBarcodeScanning.getClient(this, options).startScan()
-            .addOnSuccessListener { bc ->
-                val raw = bc.rawValue?.trim().orEmpty()
-                if (raw.isEmpty()) { toast("No value read."); return@addOnSuccessListener }
-                val item = store.find(raw)
-                if (item != null) showCount(item, individual) else showUnknown(raw, individual)
-            }
-            .addOnCanceledListener { }
-            .addOnFailureListener { e -> toast("Scanner error: ${e.message}") }
+        topBar.text = if (individual) "INDIVIDUAL UPDATE" else "SCAN"
+        val page = column()
+        page.addView(text("Pull the trigger to scan", 20f, TEXT, true))
+        page.addView(space(6))
+        page.addView(text("Aim the PM86 at the shelf PAC label and pull the scan trigger.", 13f, MUTED))
+        page.addView(space(18))
+
+        val capture = EditText(this).apply {
+            hint = "Scan or type a PAC"
+            setSingleLine()
+            typeface = mono
+            textSize = 20f
+            background = rounded(CARD, TEAL, 14, 2)
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        }
+
+        fun submit() {
+            val raw = capture.text.toString().trim()
+            if (raw.isEmpty()) { toast("No value read."); return }
+            val item = store.find(raw)
+            if (item != null) showCount(item, individual) else showUnknown(raw, individual)
+        }
+
+        capture.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_DONE ||
+                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                submit(); true
+            } else false
+        }
+        capture.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN) { submit(); true } else false
+        }
+
+        page.addView(capture)
+        page.addView(space(14))
+        page.addView(bigButton("LOOK UP", TEAL) { submit() })
+        page.addView(space(10))
+        page.addView(smallButton("BACK TO HOME") { showHome() })
+        showPage(page)
+        capture.requestFocus()
     }
 
     private fun showUnknown(raw: String, individual: Boolean) {
         val page = column()
-        page.addView(text("CODE NOT IN LIST", 20f, TEXT, true))
-        page.addView(space(10))
-        page.addView(text("Scanned:", 13f, MUTED))
-        page.addView(text(raw, 20f, RED, true))
-        page.addView(space(16))
-        page.addView(bigButton("⟐ SCAN AGAIN", TEAL) { scan(individual) })
+        page.addView(text("Code not in list", 20f, TEXT, true))
+        page.addView(space(12))
+        val c = card()
+        c.addView(text("SCANNED", 11f, MUTED, true))
+        c.addView(space(4))
+        c.addView(text(raw, 22f, RED, true))
+        page.addView(c)
+        page.addView(space(18))
+        page.addView(bigButton("SCAN AGAIN", TEAL) { scan(individual) })
         page.addView(space(8))
-        page.addView(bigButton("+ ADD THIS PAC", BLUE) { showAddItem(prefill = raw) })
+        page.addView(bigButton("ADD THIS PAC", BLUE) { showAddItem(prefill = raw) })
         page.addView(space(8))
         page.addView(smallButton("BACK TO HOME") { showHome() })
         showPage(page)
@@ -217,26 +251,24 @@ class MainActivity : Activity() {
         topBar.text = item.pac
         val page = column()
 
-        // item card
         val ic = card()
-        ic.addView(text(item.desc, 16f, TEXT, true))
+        ic.addView(text(item.desc, 17f, TEXT, true))
+        ic.addView(space(3))
         ic.addView(text("${item.pac}   ·   ${item.uom.ifBlank { "—" }}", 12f, MUTED))
-        val lastStr = if (item.lastCount.isBlank()) "Last: —" else "Last: ${item.lastCount}" +
-            (if (item.lastDate.isBlank()) "" else "  (${item.lastDate})")
-        ic.addView(text(lastStr, 13f, TEALDK, true))
-        val mm = "Min ${item.min?.clean() ?: "—"}   Max ${item.max?.clean() ?: "—"}"
-        ic.addView(text(mm, 12f, MUTED))
+        ic.addView(space(8))
+        val lastStr = if (item.lastCount.isBlank()) "Last  —" else
+            "Last  ${item.lastCount}" + (if (item.lastDate.isBlank()) "" else "   (${item.lastDate})")
+        val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        chips.addView(pill(lastStr, SOFTTEAL, TEALDK))
+        chips.addView(space(6).also { it.layoutParams = LinearLayout.LayoutParams(dp(6), 1) })
+        chips.addView(pill("Min ${item.min?.clean() ?: "—"} / Max ${item.max?.clean() ?: "—"}", BTNMUTE, MUTED))
+        ic.addView(chips)
         page.addView(ic)
-        page.addView(space(8))
+        page.addView(space(16))
 
-        // photo (tap to view/add)
-        page.addView(photoView(item))
-        page.addView(space(12))
+        page.addView(sectionLabel("TODAY'S COUNT"))
+        page.addView(space(10))
 
-        page.addView(text("TODAY'S COUNT", 13f, NAVY, true))
-        page.addView(space(8))
-
-        // center the wheel on current count, else last, else min/0
         val center = item.todayCount.toDoubleOrNull()
             ?: item.lastCount.toDoubleOrNull()
             ?: item.min ?: 0.0
@@ -252,46 +284,44 @@ class MainActivity : Activity() {
             descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
         }
 
-        // manual entry + steppers
         val manual = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
             setText(wheelValues[startIndex].clean())
-            textSize = 22f
+            textSize = 24f
             typeface = Typeface.create(mono, Typeface.BOLD)
             gravity = Gravity.CENTER
-            background = rounded(CARD, BORDER, 12, 2)
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = rounded(CARD, TEAL, 12, 2)
+            setPadding(dp(8), dp(10), dp(8), dp(10))
         }
-        // keep wheel -> manual in sync
-        picker.setOnValueChangedListener { _, _, newVal ->
-            manual.setText(wheelValues[newVal].clean())
-        }
+        picker.setOnValueChangedListener { _, _, newVal -> manual.setText(wheelValues[newVal].clean()) }
 
+        val wheelCard = card()
         val wheelRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         wheelRow.addView(picker, LinearLayout.LayoutParams(0, dp(170), 1.1f))
-        val right = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
+        val right = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0) }
         right.addView(text("MANUAL", 11f, MUTED, true))
         right.addView(space(4))
-        right.addView(manual, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)))
-        right.addView(space(8))
+        right.addView(manual, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)))
+        right.addView(space(10))
         val stepRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         stepRow.addView(stepperButton("−") { nudge(manual, -1) },
-            LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginEnd = dp(4) })
+            LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginEnd = dp(5) })
         stepRow.addView(stepperButton("+") { nudge(manual, +1) },
-            LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(4) })
+            LinearLayout.LayoutParams(0, dp(46), 1f).apply { marginStart = dp(5) })
         right.addView(stepRow)
         wheelRow.addView(right, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        page.addView(wheelRow)
-        page.addView(space(16))
+        wheelCard.addView(wheelRow)
+        page.addView(wheelCard)
+        page.addView(space(18))
 
         val footer = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         footer.addView(smallButton("CANCEL") { showHome() },
-            LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginEnd = dp(6) })
+            LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginEnd = dp(7) })
         footer.addView(bigButton("REVIEW", TEAL) {
             val v = manual.text.toString().trim()
             if (v.toDoubleOrNull() == null) { toast("Enter a number."); return@bigButton }
             showConfirm(item, v, individual)
-        }, LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginStart = dp(6) })
+        }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginStart = dp(7) })
         page.addView(footer)
         showPage(page)
     }
@@ -299,11 +329,10 @@ class MainActivity : Activity() {
     private fun nudge(field: EditText, dir: Int) {
         val cur = field.text.toString().toDoubleOrNull() ?: 0.0
         val step = WheelSteps.step(cur)
-        val next = (cur + dir * step).coerceAtLeast(0.0)
-        field.setText(next.clean())
+        field.setText((cur + dir * step).coerceAtLeast(0.0).clean())
     }
 
-    // ---------- CONFIRM (giant number) ----------
+    // ---------- CONFIRM ----------
 
     private fun showConfirm(item: CountItem, value: String, individual: Boolean) {
         topBar.text = "CONFIRM"
@@ -316,111 +345,57 @@ class MainActivity : Activity() {
         ic.addView(text(item.desc, 15f, TEXT, true))
         ic.addView(text(item.pac, 12f, MUTED))
         page.addView(ic)
-        page.addView(space(14))
+        page.addView(space(16))
 
         val big = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(16), dp(24), dp(16), dp(24))
-            background = rounded(if (below) "#FBEDEC" else "#E8F3F4", accent, 16, 3)
+            setPadding(dp(16), dp(28), dp(16), dp(28))
+            background = rounded(if (below) "#FBEDEC" else SOFTTEAL, accent, 18, 3)
         }
-        big.addView(text(value, 64f, accent, true, Gravity.CENTER))
-        big.addView(space(6))
+        big.addView(text(value, 68f, accent, true, Gravity.CENTER))
+        big.addView(space(8))
         big.addView(text("${item.pac}   ·   ${item.uom.ifBlank { "—" }}", 13f, NAVY, true, Gravity.CENTER))
-        val lastShown = item.lastCount.ifBlank { "—" }
-        big.addView(text("Last $lastShown  →  now $value", 14f, NAVY, true, Gravity.CENTER))
-        if (below) big.addView(text("BELOW MIN ${item.min?.clean()}", 13f, RED, true, Gravity.CENTER))
+        big.addView(space(2))
+        big.addView(text("Last ${item.lastCount.ifBlank { "—" }}   →   now $value", 14f, NAVY, true, Gravity.CENTER))
+        if (below) { big.addView(space(6)); big.addView(text("BELOW MIN ${item.min?.clean()}", 13f, RED, true, Gravity.CENTER)) }
         page.addView(big)
-        page.addView(space(18))
+        page.addView(space(20))
 
         val footer = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         footer.addView(smallButton("BACK") { showCount(item, individual) },
-            LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginEnd = dp(6) })
-        val saveLabel = if (individual) "SAVE" else "SAVE & NEXT"
-        footer.addView(bigButton(saveLabel, TEAL) {
+            LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginEnd = dp(7) })
+        footer.addView(bigButton(if (individual) "SAVE" else "SAVE & NEXT", TEAL) {
             store.setCount(item.pac, value)
             toast("Saved ${item.pac} = $value")
             if (individual) showHome()
-            else {
-                val next = store.remaining().firstOrNull()
-                if (next == null) { toast("All items counted."); showHome() }
-                else scan(individual = false)   // keep the scan rhythm going
-            }
-        }, LinearLayout.LayoutParams(0, dp(54), 1f).apply { marginStart = dp(6) })
+            else if (store.remaining().isEmpty()) { toast("All items counted."); showHome() }
+            else scan(individual = false)
+        }, LinearLayout.LayoutParams(0, dp(56), 1f).apply { marginStart = dp(7) })
         page.addView(footer)
         showPage(page)
     }
 
-    // ---------- photos ----------
-
-    private fun photoView(item: CountItem): View {
-        val holder = FrameLayout(this).apply {
-            background = rounded("#0E1621", "#0E1621", 14, 0)
-            setOnClickListener { capturePhoto(item.pac) { refreshIfOn(item) } }
-        }
-        val lp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(150))
-        if (store.hasPhoto(item.pac)) {
-            val iv = ImageView(this).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                setImageURI(Uri.fromFile(store.photoFile(item.pac)))
-            }
-            holder.addView(iv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            holder.addView(text("tap to retake", 10f, "#DDE6EC").apply {
-                setPadding(dp(8), dp(4), dp(8), dp(4))
-            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END))
-        } else {
-            holder.addView(text("📷  tap to add photo", 13f, "#8AA0AE", true, Gravity.CENTER),
-                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        }
-        holder.layoutParams = lp
-        return holder
-    }
-
-    private fun refreshIfOn(item: CountItem) { showCount(item, individual = false) }
-
-    private fun capturePhoto(pac: String, after: () -> Unit) {
-        val file = store.photoFile(pac)
-        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
-        pendingPhotoPac = pac
-        afterPhoto = after
-        val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-            putExtra(MediaStore.EXTRA_OUTPUT, uri)
-            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-        }
-        if (intent.resolveActivity(packageManager) != null) {
-            startActivityForResult(intent, REQ_PHOTO)
-        } else {
-            toast("No camera app found.")
-        }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ_PHOTO && resultCode == Activity.RESULT_OK) {
-            afterPhoto?.invoke()
-        }
-    }
-
-    // ---------- MANAGE items ----------
+    // ---------- MANAGE ----------
 
     private fun showManage() {
         topBar.text = "MANAGE ITEMS"
         val page = column()
-        page.addView(bigButton("+ ADD ITEM", BLUE) { showAddItem(null) })
+        page.addView(bigButton("ADD ITEM", BLUE) { showAddItem(null) })
         page.addView(space(10))
-        page.addView(smallButton("CONNECTION / SHEET URL") { showUrlSettings() })
-        page.addView(space(14))
-        page.addView(text("TAP AN ITEM TO EDIT / DELETE", 12f, MUTED, true))
-        page.addView(space(8))
+        page.addView(smallButton("SHEET LINK") { showUrlSettings() })
+        page.addView(space(18))
+        page.addView(sectionLabel("TAP AN ITEM TO EDIT OR DELETE"))
+        page.addView(space(10))
         store.items.forEach { item ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(12), dp(10), dp(12), dp(10))
-                background = rounded(CARD, LIGHTBORDER, 12, 1)
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                background = rounded(CARD, HAIRLINE, 14, 1)
                 setOnClickListener { showEditItem(item) }
             }
-            row.addView(text(item.pac + (if (item.userAdded) "  (added)" else ""), 13f, BLUE, true))
+            row.addView(text(item.pac + (if (item.userAdded) "   · added" else ""), 13f, BLUE, true))
+            row.addView(space(1))
             row.addView(text(item.desc, 13f, TEXT))
             page.addView(row); page.addView(space(8))
         }
@@ -441,10 +416,9 @@ class MainActivity : Activity() {
         addLabeled(page, "Min on hand", min)
         addLabeled(page, "Max on hand", max)
         page.addView(text("Added items must also exist on the master sheet before counts stick.", 11f, MUTED))
-        page.addView(space(10))
+        page.addView(space(12))
         page.addView(bigButton("SAVE ITEM", BLUE) {
-            val ok = store.addItem(
-                valueOf(pac), valueOf(desc), valueOf(uom),
+            val ok = store.addItem(valueOf(pac), valueOf(desc), valueOf(uom),
                 valueOf(min).toDoubleOrNull(), valueOf(max).toDoubleOrNull())
             if (!ok) toast("PAC blank or already exists.") else { toast("Item added."); showManage() }
         })
@@ -478,16 +452,16 @@ class MainActivity : Activity() {
     }
 
     private fun showUrlSettings() {
-        topBar.text = "SHEET URL"
+        topBar.text = "SHEET LINK"
         val page = column()
-        page.addView(text("MASTER SHEET LINK", 13f, NAVY, true))
-        page.addView(space(8))
+        page.addView(sectionLabel("MASTER SHEET LINK"))
+        page.addView(space(10))
         val url = EditText(this).apply {
             setText(store.sheetUrl()); minLines = 3; typeface = mono; textSize = 12f
-            background = rounded(CARD, LIGHTBORDER, 12, 1); setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = rounded(CARD, HAIRLINE, 12, 1); setPadding(dp(14), dp(12), dp(14), dp(12))
         }
         page.addView(url)
-        page.addView(space(10))
+        page.addView(space(12))
         page.addView(bigButton("SAVE LINK", TEAL) {
             store.setSheetUrl(url.text.toString()); toast("Saved."); showManage()
         })
@@ -502,47 +476,46 @@ class MainActivity : Activity() {
         topBar.text = "EXPORT"
         val page = column()
         val counted = store.countedTotal(); val total = store.total()
-        page.addView(text("$counted / $total counted", 20f, TEXT, true))
-        page.addView(text(store.countDate(), 13f, MUTED, true))
-        page.addView(space(8))
 
+        val head = card()
+        head.addView(text("$counted / $total counted", 22f, TEXT, true))
+        head.addView(space(3))
+        head.addView(text(store.countDate(), 13f, MUTED, true))
         if (counted < total) {
-            page.addView(text("${total - counted} item(s) uncounted — their cell will be left BLANK.", 12f, RED, true))
-            page.addView(space(10))
+            head.addView(space(8))
+            head.addView(text("${total - counted} uncounted — those cells stay BLANK.", 12f, RED, true))
         }
-
         val added = store.userAddedCounted()
         if (added.isNotEmpty()) {
-            page.addView(text("Caution: ${added.size} added item(s) counted — confirm they exist on the sheet.", 12f, RED))
-            page.addView(space(10))
+            head.addView(space(8))
+            head.addView(text("${added.size} added item(s) counted — confirm they exist on the sheet.", 12f, RED))
         }
+        page.addView(head)
+        page.addView(space(16))
 
-        // PRIMARY: copy + open sheet
-        page.addView(bigButton("⇪  COPY & OPEN SHEET", GREEN) {
-            copyColumn()
-            store.markExported()
-            openSheet()
+        page.addView(bigButton("COPY & OPEN SHEET", GREEN) {
+            copyColumn(); store.markExported(); openSheet()
         })
         page.addView(space(6))
-        page.addView(text("Copies the column, opens the sheet. Then tap the new date column and paste.", 11f, MUTED))
-        page.addView(space(14))
+        page.addView(text("Copies the column and opens the sheet. Tap the new date column and paste.", 11f, MUTED))
+        page.addView(space(16))
 
         page.addView(smallButton("COPY COLUMN ONLY") { copyColumn(); toast("Column copied.") })
         page.addView(space(8))
         page.addView(smallButton("SHARE CSV (BACKUP)") { shareCsv() })
-        page.addView(space(16))
+        page.addView(space(18))
 
-        page.addView(text("COLUMN PREVIEW (pastes top-to-bottom)", 12f, MUTED, true))
-        page.addView(space(6))
+        page.addView(sectionLabel("COLUMN PREVIEW"))
+        page.addView(space(8))
         val preview = TextView(this).apply {
-            text = store.items.joinToString("\n") { "${it.pac}  ${if (it.counted) it.todayCount else "(blank)"}" }
+            text = store.items.joinToString("\n") { "${it.pac}   ${if (it.counted) it.todayCount else "·"}" }
             textSize = 12f; typeface = mono; setTextColor(Color.parseColor(TEXT))
-            setPadding(dp(12), dp(12), dp(12), dp(12)); background = rounded(CARD, LIGHTBORDER, 12, 1)
+            setPadding(dp(14), dp(12), dp(14), dp(12)); background = rounded(CARD, HAIRLINE, 12, 1)
         }
         page.addView(preview)
-        page.addView(space(16))
+        page.addView(space(18))
 
-        page.addView(smallButton("START NEW DAY (after paste)") { confirmNewDay() })
+        page.addView(smallButton("START NEW DAY") { confirmNewDay() })
         page.addView(space(8))
         page.addView(smallButton("BACK TO HOME") { showHome() })
         showPage(page)
@@ -554,11 +527,8 @@ class MainActivity : Activity() {
     }
 
     private fun openSheet() {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(store.sheetUrl())))
-        } catch (e: Exception) {
-            toast("Could not open sheet link.")
-        }
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(store.sheetUrl()))) }
+        catch (e: Exception) { toast("Could not open sheet link.") }
     }
 
     private fun shareCsv() {
@@ -572,17 +542,17 @@ class MainActivity : Activity() {
 
     private fun confirmNewDay() {
         val page = column()
-        page.addView(text("START NEW DAY?", 20f, TEXT, true))
-        page.addView(space(10))
+        page.addView(text("Start a new day?", 20f, TEXT, true))
+        page.addView(space(12))
         if (!store.wasExported()) {
             page.addView(text("You have NOT exported today's counts yet. Export first so nothing is lost.", 13f, RED, true))
-            page.addView(space(12))
-            page.addView(smallButton("GO EXPORT FIRST") { showExport() })
+            page.addView(space(14))
+            page.addView(bigButton("GO EXPORT FIRST", TEAL) { showExport() })
             page.addView(space(8))
             page.addView(smallButton("CANCEL") { showExport() })
         } else {
             page.addView(text("Today's counts become 'last count' and today's entries clear for a fresh sweep.", 13f, MUTED))
-            page.addView(space(14))
+            page.addView(space(16))
             page.addView(bigButton("YES, START NEW DAY", TEAL) {
                 store.startNewDay(); toast("New day started."); showHome()
             })
@@ -602,18 +572,28 @@ class MainActivity : Activity() {
 
     private fun valueOf(e: EditText) = e.text.toString().trim()
 
-    /** Returns the EditText itself (so valueOf type-checks); use addLabeled() to place it. */
     private fun labeledInput(value: String): EditText = EditText(this).apply {
         setText(value); setSingleLine(); typeface = mono; textSize = 15f
-        background = rounded(CARD, LIGHTBORDER, 10, 1); setPadding(dp(12), dp(8), dp(12), dp(8))
+        background = rounded(CARD, HAIRLINE, 10, 1); setPadding(dp(12), dp(9), dp(12), dp(9))
     }
 
-    /** Adds a label + the given field (with spacing) to the page column. */
     private fun addLabeled(page: LinearLayout, label: String, field: EditText) {
         page.addView(text(label, 11f, MUTED, true))
-        page.addView(space(2))
+        page.addView(space(3))
         page.addView(field, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)))
-        page.addView(space(8))
+        page.addView(space(10))
+    }
+
+    private fun sectionLabel(s: String) = TextView(this).apply {
+        text = s; textSize = 12f; setTextColor(Color.parseColor(MUTED))
+        letterSpacing = 0.1f; typeface = Typeface.create(mono, Typeface.BOLD)
+    }
+
+    private fun pill(label: String, fill: String, textColor: String) = TextView(this).apply {
+        text = label; textSize = 11f; typeface = Typeface.create(mono, Typeface.BOLD)
+        setTextColor(Color.parseColor(textColor))
+        setPadding(dp(10), dp(5), dp(10), dp(5))
+        background = rounded(fill, fill, 20, 0)
     }
 
     private fun showPage(view: View) {
@@ -625,31 +605,32 @@ class MainActivity : Activity() {
     }
 
     private fun column() = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(40))
+        orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(18), dp(18), dp(44))
     }
 
     private fun card() = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(14), dp(14), dp(14))
-        background = rounded(CARD, BORDER, 14, 2)
+        orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(16))
+        background = rounded(CARD, HAIRLINE, 16, 1)
     }
 
     private fun bigButton(label: String, color: String, action: () -> Unit) = Button(this).apply {
         text = label; isAllCaps = false; textSize = 15f; setTextColor(Color.WHITE)
-        typeface = Typeface.create(mono, Typeface.BOLD); background = rounded(color, color, 12, 0)
+        letterSpacing = 0.04f
+        typeface = Typeface.create(mono, Typeface.BOLD); background = rounded(color, color, 14, 0)
         setOnClickListener { action() }
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56))
     }
 
     private fun smallButton(label: String, action: () -> Unit) = Button(this).apply {
         text = label; isAllCaps = false; textSize = 13f; setTextColor(Color.parseColor(NAVY))
-        typeface = Typeface.create(mono, Typeface.BOLD); background = rounded(BTNMUTE, LIGHTBORDER, 12, 1)
+        typeface = Typeface.create(mono, Typeface.BOLD); background = rounded(BTNMUTE, HAIRLINE, 14, 1)
         setOnClickListener { action() }
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48))
     }
 
     private fun stepperButton(label: String, action: () -> Unit) = Button(this).apply {
-        text = label; isAllCaps = false; textSize = 20f; setTextColor(Color.parseColor(TEAL))
-        typeface = Typeface.create(mono, Typeface.BOLD); background = rounded("#EDF2F4", BORDER, 10, 1)
+        text = label; isAllCaps = false; textSize = 22f; setTextColor(Color.parseColor(TEAL))
+        typeface = Typeface.create(mono, Typeface.BOLD); background = rounded(SOFTTEAL, TEAL, 10, 1)
         setOnClickListener { action() }
     }
 

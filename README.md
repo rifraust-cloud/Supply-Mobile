@@ -6,7 +6,7 @@ paste into the master sheet at the end.
 
 ## The loop
 
-1. **Scan** the printed Code 128 PAC label on the bin/shelf.
+1. **Scan** the printed Code 128 PAC label with the PM86 trigger (keyboard-wedge).
 2. The item screen shows its **photo**, UOM, Min/Max, and **last count**.
 3. Set today's count on the **rolling wheel** (0.25 steps for small counts, whole numbers
    once large) or type it in **manual entry** with +/- steppers. Decimals supported.
@@ -45,5 +45,5 @@ Barcodes to print are in `labels/PTX7_PAC_Barcodes_Code128.pdf`.
 
 ## Reused from the proven PIMS scanner
 
-- Google's one-tap `play-services-code-scanner` (no fragile camera pipeline).
+- Point Mobile PM86 built-in scanner in keyboard-wedge mode (no camera, no ML Kit).
 - GitHub Actions cloud build → sideload APK.

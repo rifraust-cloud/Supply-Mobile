@@ -1,7 +1,7 @@
 # PTX7 Cycle Count Scanner — Test Plan
 
-## Test 1 — Scan a known PAC
-Scan a printed label, e.g. `PAC13180`.
+## Test 1 — Scan a known PAC (PM86 trigger)
+On the SCAN screen, pull the PM86 trigger on a printed label, e.g. `PAC13180`. (The wedge types the PAC + Enter.)
 Expected: correct item appears (description, UOM, Min/Max, last count). No added characters.
 
 ## Test 2 — Count via wheel
