@@ -426,6 +426,8 @@ class MainActivity : Activity() {
         val page = column()
         page.addView(bigButton("ADD ITEM", BLUE) { showAddItem(null) })
         page.addView(space(10))
+        page.addView(smallButton("PAIR A BARCODE") { pairBarcode() })
+        page.addView(space(8))
         page.addView(smallButton("SHEET LINK") { showUrlSettings() })
         page.addView(space(8))
         page.addView(smallButton("BACKUP / RESTORE") { showBackup() })
@@ -487,7 +489,31 @@ class MainActivity : Activity() {
             store.updateItem(item.pac, valueOf(desc), valueOf(uom), valueOf(min).toDoubleOrNull(), valueOf(max).toDoubleOrNull())
             toast("Updated."); showManage()
         })
+        page.addView(space(16))
+
+        // linked product barcodes
+        page.addView(sectionLabel("LINKED BARCODES"))
         page.addView(space(8))
+        val codes = store.barcodesFor(item.pac)
+        if (codes.isEmpty()) {
+            page.addView(text("None yet. Use 'Pair a Barcode' or scan an unknown code.", 12f, MUTED))
+        } else {
+            codes.forEach { code ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(12), dp(10), dp(12), dp(10))
+                    background = rounded(CARD, HAIRLINE, 12, 1)
+                }
+                row.addView(text(code, 13f, TEALDK, true),
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                row.addView(smallButton("REMOVE") {
+                    store.unlinkBarcode(code); toast("Removed."); showEditItem(item)
+                }, LinearLayout.LayoutParams(dp(110), dp(42)))
+                page.addView(row); page.addView(space(6))
+            }
+        }
+        page.addView(space(16))
+
         page.addView(bigButton("DELETE ITEM", RED) {
             store.deleteItem(item.pac); toast("Deleted ${item.pac}."); showManage()
         })
@@ -688,30 +714,80 @@ class MainActivity : Activity() {
         startActivityForResult(Intent.createChooser(intent, "Choose image"), REQ_PICK_IMAGE)
     }
 
+
+    /** Front-door: scan the product barcode first, then link it to a PAC. */
+    private fun pairBarcode() {
+        topBar.text = "PAIR A BARCODE"
+        val page = column()
+        page.addView(text("Scan the product barcode", 18f, TEXT, true))
+        page.addView(space(6))
+        page.addView(text("Pull the trigger on the box's own barcode, then you'll pick the PAC.", 13f, MUTED))
+        page.addView(space(16))
+        val capture = EditText(this).apply {
+            hint = "Scan or type the product barcode"
+            setSingleLine(); typeface = mono; textSize = 18f
+            background = rounded(CARD, TEAL, 14, 2); setPadding(dp(16), dp(14), dp(16), dp(14))
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        }
+        fun go() {
+            val raw = capture.text.toString().trim()
+            if (raw.isEmpty()) { toast("No value read."); return }
+            showLinkBarcode(raw)
+        }
+        capture.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_DONE ||
+                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                go(); true
+            } else false
+        }
+        page.addView(capture)
+        page.addView(space(12))
+        page.addView(bigButton("NEXT", TEAL) { go() })
+        page.addView(space(8))
+        page.addView(smallButton("BACK") { showManage() })
+        showPage(page)
+        capture.requestFocus()
+    }
+
     // ---------- BARCODE -> PAC association ----------
 
     private fun showLinkBarcode(barcode: String) {
         topBar.text = "LINK BARCODE"
         val page = column()
         val c = card()
-        c.addView(text("BARCODE", 11f, MUTED, true)); c.addView(space(4))
+        c.addView(text("PRODUCT BARCODE", 11f, MUTED, true)); c.addView(space(4))
         c.addView(text(barcode, 18f, TEALDK, true))
         page.addView(c)
         page.addView(space(14))
-        page.addView(text("Enter the PAC this barcode belongs to:", 13f, MUTED))
+        page.addView(text("Scan the PAC label (or type the PAC) to link:", 13f, MUTED))
         page.addView(space(8))
-        val pacField = labeledInput("")
-        addLabeled(page, "PAC", pacField)
-        page.addView(bigButton("LINK", GREEN) {
-            val pac = valueOf(pacField)
-            if (store.linkBarcode(barcode, pac)) {
-                toast("Linked $barcode → $pac")
-                store.find(pac)?.let { showCount(it, false) } ?: showHome()
+        val pacField = labeledInput("").apply {
+            hint = "Scan or type PAC, then Enter"
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        }
+        fun doLink() {
+            val raw = valueOf(pacField)
+            // resolve either a PAC or an already-linked barcode to the real PAC
+            val resolved = store.find(raw)?.pac ?: raw
+            if (store.linkBarcode(barcode, resolved)) {
+                toast("Linked → $resolved")
+                store.find(resolved)?.let { showCount(it, false) } ?: showHome()
             } else toast("Unknown PAC — add it first.")
-        })
+        }
+        pacField.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_DONE ||
+                (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
+                doLink(); true
+            } else false
+        }
+        addLabeled(page, "PAC", pacField)
+        page.addView(bigButton("LINK", GREEN) { doLink() })
         page.addView(space(8))
         page.addView(smallButton("CANCEL") { showHome() })
         showPage(page)
+        pacField.requestFocus()
     }
 
     // ---------- BACKUP / RESTORE ----------
